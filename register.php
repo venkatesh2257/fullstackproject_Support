@@ -1,134 +1,101 @@
+<?php
+require_once 'config.php';
+
+$error = '';
+$success = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = sanitize($_POST['username'] ?? '');
+    $email = sanitize($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $confirm_password = $_POST['confirm_password'] ?? '';
+    $role = sanitize($_POST['role'] ?? 'user');
+    
+    if (empty($username) || empty($email) || empty($password)) {
+        $error = 'Please fill in all fields';
+    } elseif ($password !== $confirm_password) {
+        $error = 'Passwords do not match';
+    } elseif (strlen($password) < 6) {
+        $error = 'Password must be at least 6 characters';
+    } else {
+        $conn = getDBConnection();
+        
+        // Check if email exists
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        if ($stmt->get_result()->num_rows > 0) {
+            $error = 'Email already registered';
+        } else {
+            // Check if username exists
+            $stmt = $conn->prepare("SELECT id FROM users WHERE username = ?");
+            $stmt->bind_param("s", $username);
+            $stmt->execute();
+            if ($stmt->get_result()->num_rows > 0) {
+                $error = 'Username already taken';
+            } else {
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $conn->prepare("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param("ssss", $username, $email, $hashed_password, $role);
+                
+                if ($stmt->execute()) {
+                    $success = 'Registration successful! Please login.';
+                } else {
+                    $error = 'Registration failed. Please try again.';
+                }
+            }
+        }
+        $stmt->close();
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Account</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Register - <?php echo SITE_NAME; ?></title>
+    <link rel="stylesheet" href="assets/css/style.css">
 </head>
-
 <body>
-
-<div class="login-container">
-    <div class="login-card">
-
-        <!-- Header -->
-        <div class="login-header">
-            <div class="logo-icon">✨</div>
-            <h2>Create Account</h2>
-            <p>Join us today</p>
-        </div>
-
-        <!-- Registration Form -->
-        <form id="registerForm">
-
-            <!-- Full Name -->
-            <div class="form-group">
-                <div class="input-wrapper">
-                    <input type="text" id="fullname" required>
-                    <label>Full Name</label>
-                    <div class="input-line"></div>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>Register</h1>
+            <?php if ($error): ?>
+                <div class="alert alert-error"><?php echo $error; ?></div>
+            <?php endif; ?>
+            <?php if ($success): ?>
+                <div class="alert alert-success"><?php echo $success; ?></div>
+            <?php endif; ?>
+            <form method="POST" action="">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" name="username" required>
                 </div>
-            </div>
-
-            <!-- Email -->
-            <div class="form-group">
-                <div class="input-wrapper">
-                    <input type="email" id="email" required>
-                    <label>Email Address</label>
-                    <div class="input-line"></div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" required>
                 </div>
-            </div>
-
-            <!-- Password -->
-            <div class="form-group password-wrapper">
-                <div class="input-wrapper">
-                    <input type="password" id="password" required>
+                <div class="form-group">
                     <label>Password</label>
-                    <div class="input-line"></div>
-
-                    <button type="button" class="password-toggle" id="togglePass">
-                        <span class="toggle-icon"></span>
-                    </button>
+                    <input type="password" name="password" required>
                 </div>
-            </div>
-
-            <!-- Confirm Password -->
-            <div class="form-group password-wrapper">
-                <div class="input-wrapper">
-                    <input type="password" id="confirmPassword" required>
+                <div class="form-group">
                     <label>Confirm Password</label>
-                    <div class="input-line"></div>
-
-                    <button type="button" class="password-toggle" id="toggleConfirm">
-                        <span class="toggle-icon"></span>
-                    </button>
+                    <input type="password" name="confirm_password" required>
                 </div>
-            </div>
-
-            <!-- Terms -->
-            <div class="form-options">
-                <label class="remember-wrapper">
-                    <input type="checkbox" required>
-                    <span class="checkbox-label">
-                        <span class="custom-checkbox"></span>
-                        I agree to the Terms & Conditions
-                    </span>
-                </label>
-            </div>
-
-            <!-- Button -->
-            <button type="submit" class="login-btn">
-                <span class="btn-glow"></span>
-                <span class="btn-text">Create Account</span>
-                <span class="btn-loader"></span>
-            </button>
-
-            <!-- Divider -->
-            <div class="divider"><span>OR</span></div>
-
-            <!-- Social -->
-            <div class="social-login">
-                <button class="social-btn">
-                    <span class="social-icon google-icon"></span>
-                    Sign up with Google
-                </button>
-
-                <button class="social-btn">
-                    <span class="social-icon apple-icon"></span>
-                    Sign up with Apple
-                </button>
-            </div>
-
-            <!-- Login Link -->
-            <div class="signup-link">
-                <p>Already have an account? <a href="#">Sign In</a></p>
-            </div>
-
-        </form>
-
-        <!-- Success -->
-        <div class="success-message" id="successMsg" style="display:none;">
-            <div class="success-icon">✔</div>
-            <h3>Account Created</h3>
-            <p>Redirecting...</p>
+                <div class="form-group">
+                    <label>Register as</label>
+                    <select name="role" required>
+                        <option value="user">User</option>
+                        <option value="merchant">Merchant</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Register</button>
+            </form>
+            <p class="auth-link">Already have an account? <a href="login.php">Login here</a></p>
         </div>
-
     </div>
-</div>
-
-<!-- JS for password show/hide -->
-<script>
-document.getElementById("togglePass").onclick = function () {
-    let pass = document.getElementById("password");
-    pass.type = pass.type === "password" ? "text" : "password";
-};
-
-document.getElementById("toggleConfirm").onclick = function () {
-    let pass = document.getElementById("confirmPassword");
-    pass.type = pass.type === "password" ? "text" : "password";
-};
-</script>
-
 </body>
 </html>
+
